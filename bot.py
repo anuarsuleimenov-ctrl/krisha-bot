@@ -488,6 +488,13 @@ async def scheduled_parse_and_send():
 async def main():
     await db.init_db()
 
+    # Initial parse on startup so listings are available immediately
+    logger.info("Первичный парсинг при запуске...")
+    try:
+        await scheduled_parse_and_send()
+    except Exception as e:
+        logger.error(f"Ошибка первичного парсинга: {e}")
+
     scheduler = AsyncIOScheduler(timezone="Asia/Almaty")
     scheduler.add_job(scheduled_parse_and_send, "cron", hour="2,6,11,16,21", minute=0)
     scheduler.start()
