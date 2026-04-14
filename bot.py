@@ -3,7 +3,7 @@ import asyncio
 from datetime import datetime, timedelta, timezone
 
 from aiogram import Bot, Dispatcher, Router, F
-from aiogram.types import Message
+from aiogram.types import Message, ReplyKeyboardMarkup, KeyboardButton
 from aiogram.filters import Command, CommandStart
 from aiogram.enums import ParseMode
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -23,7 +23,7 @@ dp = Dispatcher()
 router = Router()
 dp.include_router(router)
 
-# ─── Helpers ────────────────────────────────────────────────
+# --- Helpers ------------------------------------------------
 
 DISTRICT_MAP = {
     "1": "Есильский", "2": "Алматинский", "3": "Байконурский",
@@ -31,6 +31,15 @@ DISTRICT_MAP = {
 }
 
 ROOMS_MAP = {"1": (1,1), "2": (2,2), "3": (3,3), "4": (4,99), "5": (1,99)}
+
+MAIN_KB = ReplyKeyboardMarkup(
+    keyboard=[
+        [KeyboardButton(text="/настроить"), KeyboardButton(text="/топ")],
+        [KeyboardButton(text="/тарифы"), KeyboardButton(text="/статус")],
+        [KeyboardButton(text="/помощь")],
+    ],
+    resize_keyboard=True,
+)
 
 
 def format_price(n: int) -> str:
@@ -71,7 +80,7 @@ def trial_warning(user: dict) -> str:
     return ""
 
 
-# ─── /start ─────────────────────────────────────────────────
+# --- /start -------------------------------------------------
 
 @router.message(CommandStart())
 async def cmd_start(msg: Message):
@@ -100,10 +109,11 @@ async def cmd_start(msg: Message):
         "Посмотреть топ: /топ\n"
         "Тарифы: /тарифы",
         parse_mode=ParseMode.MARKDOWN,
+        reply_markup=MAIN_KB,
     )
 
 
-# ─── /настроить ─────────────────────────────────────────────
+# --- /настроить -------------------------------------------------
 
 @router.message(Command("настроить"))
 async def cmd_setup(msg: Message):
@@ -120,7 +130,7 @@ async def cmd_setup(msg: Message):
     )
 
 
-# ─── Setup flow (stateful) ──────────────────────────────────
+# --- Setup flow (stateful) ----------------------------------
 
 @router.message(F.text & ~F.text.startswith("/"))
 async def handle_text(msg: Message):
@@ -204,13 +214,14 @@ async def handle_text(msg: Message):
             f"🏗 ЖК: {user['target_zhk'] or 'любые'}\n\n"
             f"🎁 Триал: осталось {left} дней Премиум-доступа\n\n"
             "Подборки придут в ближайшие 5 часов.\n"
-            "Посмотреть сейчас: /топ"
+            "Посмотреть сейчас: /топ",
+            reply_markup=MAIN_KB,
         )
     else:
         await msg.answer("Не понял команду. Напиши /помощь")
 
 
-# ─── /топ ────────────────────────────────────────────────────
+# --- /топ ------------------------------------------------
 
 @router.message(Command("топ", "топ5", "топ10", "top"))
 async def cmd_top(msg: Message):
@@ -241,7 +252,7 @@ async def cmd_top(msg: Message):
     header = (
         f"🔄 Топ-{len(sorted_listings)} по твоим фильтрам\n"
         f"📍 Районы: {user['districts'] or 'Все'}\n"
-        f"{'─' * 25}\n"
+        f"{'\u2500' * 25}\n"
     )
     cards = []
     for i, l in enumerate(sorted_listings, 1):
@@ -256,7 +267,7 @@ async def cmd_top(msg: Message):
             f"🔗 [Объявление]({l['url']})"
         )
 
-    footer = f"\n{'─' * 25}\n📊 Диапазон: {format_price(sorted_listings[0]['price_m2'])}–{format_price(sorted_listings[-1]['price_m2'])} ₸/м²"
+    footer = f"\n{'\u2500' * 25}\n📊 Диапазон: {format_price(sorted_listings[0]['price_m2'])}–{format_price(sorted_listings[-1]['price_m2'])} ₸/м²"
 
     if tariff == "Бесплатный":
         footer += "\n\n💡 Полный доступ за 5,000 ₸/мес: /тарифы"
@@ -273,7 +284,7 @@ async def cmd_top(msg: Message):
         await msg.answer(text, parse_mode=ParseMode.MARKDOWN, disable_web_page_preview=True)
 
 
-# ─── /жк ─────────────────────────────────────────────────────
+# --- /жк -------------------------------------------------
 
 @router.message(Command("жк"))
 async def cmd_zhk(msg: Message):
@@ -283,41 +294,41 @@ async def cmd_zhk(msg: Message):
         return
     listings = await db.search_by_zhk(name)
     if not listings:
-        await msg.answer(f"Объявления по ЖК «{name}» не найдены.")
+        await msg.answer(f"Объявления по ЖК \u00ab{name}\u00bb не найдены.")
         return
-    lines = [f"🏗 *ЖК {name}* — {len(listings)} объявлений:\n"]
+    lines = [f"🏗 *ЖК {name}* \u2014 {len(listings)} объявлений:\n"]
     for l in listings[:15]:
         lines.append(
-            f"• {l['rooms']} комн. {l['area']}м² — {format_price(l['price'])} ₸ "
-            f"(*{format_price(l['price_m2'])} ₸/м²*)"
+            f"\u2022 {l['rooms']} комн. {l['area']}м\u00b2 \u2014 {format_price(l['price'])} ₸ "
+            f"(*{format_price(l['price_m2'])} ₸/м\u00b2*)"
         )
     await msg.answer("\n".join(lines), parse_mode=ParseMode.MARKDOWN)
 
 
-# ─── /тарифы ──────────────────────────────────────────────────
+# --- /тарифы ------------------------------------------------
 
 @router.message(Command("тарифы"))
 async def cmd_tariffs(msg: Message):
     await msg.answer(
         "📋 *Тарифы:*\n\n"
-        "🎁 *Триал* — 7 дней бесплатно\n"
-        "• Полный Премиум-доступ для новых пользователей\n\n"
-        "🆓 *Бесплатный* — 0 ₸/мес\n"
-        "• Топ-3 раз в день, без телефонов, 1 район\n\n"
-        "💼 *Стандарт* — 5,000 ₸/мес\n"
-        "• Топ-10 каждые 5 часов\n"
-        "• Телефоны продавцов\n"
-        "• До 3 районов, алерты\n\n"
-        "👑 *Премиум* — 15,000 ₸/мес\n"
-        "• Все районы Астаны\n"
-        "• Аналитика по ЖК\n"
-        "• Персональные фильтры\n\n"
+        "🎁 *Триал* \u2014 7 дней бесплатно\n"
+        "\u2022 Полный Премиум-доступ для новых пользователей\n\n"
+        "🆓 *Бесплатный* \u2014 0 ₸/мес\n"
+        "\u2022 Топ-3 раз в день, без телефонов, 1 район\n\n"
+        "💼 *Стандарт* \u2014 5,000 ₸/мес\n"
+        "\u2022 Топ-10 каждые 5 часов\n"
+        "\u2022 Телефоны продавцов\n"
+        "\u2022 До 3 районов, алерты\n\n"
+        "👑 *Премиум* \u2014 15,000 ₸/мес\n"
+        "\u2022 Все районы Астаны\n"
+        "\u2022 Аналитика по ЖК\n"
+        "\u2022 Персональные фильтры\n\n"
         "Оплата: /оплата",
         parse_mode=ParseMode.MARKDOWN,
     )
 
 
-# ─── /оплата ──────────────────────────────────────────────────
+# --- /оплата ------------------------------------------------
 
 @router.message(Command("оплата"))
 async def cmd_payment(msg: Message):
@@ -327,13 +338,13 @@ async def cmd_payment(msg: Message):
         f"{('   ' + config.KASPI_NAME) if config.KASPI_NAME else ''}\n"
         "2. Отправь скриншот чека в этот чат\n"
         "3. Подписка активируется в течение часа\n\n"
-        "💼 Стандарт — 5,000 ₸/мес\n"
-        "👑 Премиум — 15,000 ₸/мес",
+        "💼 Стандарт \u2014 5,000 ₸/мес\n"
+        "👑 Премиум \u2014 15,000 ₸/мес",
         parse_mode=ParseMode.MARKDOWN,
     )
 
 
-# ─── /статус ──────────────────────────────────────────────────
+# --- /статус ------------------------------------------------
 
 @router.message(Command("статус"))
 async def cmd_status(msg: Message):
@@ -353,7 +364,7 @@ async def cmd_status(msg: Message):
         f"📍 Районы: {user['districts'] or 'не выбраны'}\n"
         f"🏠 Комнаты: {user['rooms_min'] or '?'}-{user['rooms_max'] or '?'}\n"
         f"💰 Бюджет: {format_price(user['budget_min'] or 0)}-{format_price(user['budget_max'] or 0)} ₸\n"
-        f"📊 Макс цена/м²: {format_price(user['max_price_m2']) if user['max_price_m2'] else 'любая'}\n"
+        f"📊 Макс цена/м\u00b2: {format_price(user['max_price_m2']) if user['max_price_m2'] else 'любая'}\n"
         f"🏗 ЖК: {user['target_zhk'] or 'любые'}\n\n"
         f"{tariff_line}\n\n"
         "Изменить: /настроить",
@@ -361,26 +372,26 @@ async def cmd_status(msg: Message):
     )
 
 
-# ─── /помощь ──────────────────────────────────────────────────
+# --- /помощь ------------------------------------------------
 
 @router.message(Command("помощь", "help"))
 async def cmd_help(msg: Message):
     await msg.answer(
         "📖 *Команды бота:*\n\n"
-        "/старт — регистрация\n"
-        "/настроить — настроить фильтры\n"
-        "/топ — персональный топ-10\n"
-        "/топ5 — топ-5\n"
-        "/жк Название — поиск по ЖК\n"
-        "/статус — профиль и подписка\n"
-        "/тарифы — тарифные планы\n"
-        "/оплата — реквизиты оплаты\n"
-        "/помощь — эта справка",
+        "/старт \u2014 регистрация\n"
+        "/настроить \u2014 настроить фильтры\n"
+        "/топ \u2014 персональный топ-10\n"
+        "/топ5 \u2014 топ-5\n"
+        "/жк Название \u2014 поиск по ЖК\n"
+        "/статус \u2014 профиль и подписка\n"
+        "/тарифы \u2014 тарифные планы\n"
+        "/оплата \u2014 реквизиты оплаты\n"
+        "/помощь \u2014 эта справка",
         parse_mode=ParseMode.MARKDOWN,
     )
 
 
-# ─── Scheduled parsing + broadcast ──────────────────────────
+# --- Scheduled parsing + broadcast --------------------------
 
 async def scheduled_parse_and_send():
     """Парсинг + валидация + рассылка (каждые 5 часов)."""
@@ -409,7 +420,7 @@ async def scheduled_parse_and_send():
 
     # 4. Broadcast (skip at night)
     if is_night:
-        logger.info("Ночь — рассылка пропущена")
+        logger.info("Ночь \u2014 рассылка пропущена")
         return
 
     users = await db.get_active_users()
@@ -443,7 +454,7 @@ async def scheduled_parse_and_send():
                 continue
 
             header = (
-                f"🔄 Обновление — {now.strftime('%d.%m.%Y %H:%M')}\n"
+                f"🔄 Обновление \u2014 {now.strftime('%d.%m.%Y %H:%M')}\n"
                 f"📍 {user['districts'] or 'Все районы'}\n"
                 f"Найдено: {len(filtered)} | Твой топ-{len(top)}:\n"
             )
@@ -452,14 +463,14 @@ async def scheduled_parse_and_send():
                 phone_line = f"📞 {l['phone']}\n" if limits["phones"] and l.get("phone") else ""
                 cards.append(
                     f"🏆 #{i} | {l['district']}\n"
-                    f"🏗 {l['zhk']} | {l['rooms']} комн. {l['area']}м²\n"
+                    f"🏗 {l['zhk']} | {l['rooms']} комн. {l['area']}м\u00b2\n"
                     f"💰 {format_price(l['price'])} ₸ | "
-                    f"📊 {format_price(l['price_m2'])} ₸/м²\n"
+                    f"📊 {format_price(l['price_m2'])} ₸/м\u00b2\n"
                     f"{phone_line}"
                     f"🔗 {l['url']}"
                 )
 
-            footer = f"\n📊 {format_price(top[0]['price_m2'])}–{format_price(top[-1]['price_m2'])} ₸/м²"
+            footer = f"\n📊 {format_price(top[0]['price_m2'])}\u2013{format_price(top[-1]['price_m2'])} ₸/м\u00b2"
             if tariff == "Бесплатный":
                 footer += "\n💡 Полный доступ: /тарифы"
             footer += trial_warning(user)
@@ -472,7 +483,7 @@ async def scheduled_parse_and_send():
             logger.error(f"Ошибка рассылки для {user['chat_id']}: {e}")
 
 
-# ─── Main ────────────────────────────────────────────────────
+# --- Main ------------------------------------------------
 
 async def main():
     await db.init_db()
